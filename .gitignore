@@ -1,0 +1,30 @@
+# Logs
+logs
+*.log
+tmp.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+node_modules
+dist
+dist-ssr
+deprecated
+external
+keys
+
+**/__pycache__/
+# Editor directories and files
+*.local
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+sx1262_driver.egg-info
+packet.txt

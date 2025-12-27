@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meshcore-node"
+version = "0.1.0"
+description = "A standalone MeshCore OTA node implementation in Python."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Gregg A. Lebovitz" }
+]
+
+keywords = ["mesh", "lora", "meshcore", "radio", "networking", "embedded"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Communications",
+    "Topic :: System :: Networking",
+]
+
+dependencies = [
+    "cryptography>=41.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YOUR_GITHUB/meshcore-node"
+Documentation = "https://github.com/YOUR_GITHUB/meshcore-node/docs"
+Source = "https://github.com/YOUR_GITHUB/meshcore-node"
+Issues = "https://github.com/YOUR_GITHUB/meshcore-node/issues"
+
+[tool.setuptools.packages.find]
+where = ["meshcore_node"]
