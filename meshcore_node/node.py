@@ -6,84 +6,58 @@ from meshcore_node.packet.packet import MeshCorePacket
 from meshcore_node.packet.header import PayloadType
 from meshcore_node.crypto.identity import Identity, LocalIdentity
 from meshcore_node.group import GroupChannel
-from meshcore_node.routing.forwarding import Router
+from meshcore_node.routing.forwarding import ForwardingRouter
 from meshcore_node.routing.outbound import OutboundRouter
 
 
 class MeshCoreNode:
-    """
-    MeshCore OTA logic layer (Python equivalent of Mesh.cpp, logic only).
-
-    Responsibilities:
-      - Parse inbound packets
-      - Dedupe (via store.dedupe)
-      - Dispatch to per-type handlers
-      - Decrypt direct/group messages
-      - Emit events upstream
-      - Invoke Router for forwarding decisions
-      - Use OutboundRouter for outbound routing selection
-    """
-
-    def __init__(
-        self,
-        identity: LocalIdentity,
-        send_raw: Callable[[bytes], None],
-        emit_event: Callable[[str, dict], None],
-        store,
-    ):
-        """
-        :param identity: LocalIdentity (holds private/public keys)
-        :param send_raw: callback to actually TX bytes over radio/transport
-        :param emit_event: callback to send decoded events upward
-        :param store: LocalStore instance (identity, groups, peers, dedupe)
-        """
+    def __init__(self, identity, send_raw, emit_event, store, *, is_router=False):
         self.identity = identity
         self.send_raw = send_raw
         self.emit_event = emit_event
         self.store = store
+        self.is_router = is_router
 
-        # Store-backed registries
         self._groups = store.groups      # dict[bytes, GroupChannel]
         self._dedupe = store.dedupe      # DedupeTable-like
 
-        # Routing helpers
-        self.router = Router(self.identity.hash())
-        self.outbound = OutboundRouter(self.identity.hash())
+        # outbound/inbound routing helpers
+        self.outbound = OutboundRouter(self)
+        self.router = ForwardingRouter(self)
 
     # ------------------------------------------------------------
-    # Inbound entry point
+    # Guarded send
     # ------------------------------------------------------------
-    def on_raw_packet(
-        self,
-        raw: bytes,
-        snr: Optional[float] = None,
-        rssi: Optional[float] = None,
-    ):
-        """
-        Entry point from the radio/transport.
-        """
+    def send_guarded(self, data: bytes, *, is_forwarding: bool):
+        if is_forwarding and not self.is_router:
+            raise RuntimeError("Companion nodes cannot forward packets")
+        self.send_raw(data)
+
+    # ------------------------------------------------------------
+    # Inbound packet entry point
+    # ------------------------------------------------------------
+    def on_raw_packet(self, raw: bytes, snr=None, rssi=None):
         try:
             pkt = MeshCorePacket.from_bytes(raw)
         except Exception:
             # Malformed packet
             return
 
-        pkt.snr = snr
-        pkt.rssi = rssi
-
-        # Dedupe: compute and check hash using MeshCorePacket helper
+        # Dedupe (always)
         packet_hash = pkt.compute_hash()
         if self.store.has_seen(packet_hash):
             return
         self.store.mark_seen(packet_hash)
 
-        # Dispatch to type-specific handler
-        self._handle_packet(pkt)
+        # Local handling (companion nodes only)
+        if not self.is_router:
+            self._handle_packet(pkt)
 
-        # Routing: decide whether to forward
-        decision = self.router.decide(pkt)
-        if decision.forward and decision.packet is not None:
-            self.send_raw(decision.packet.to_bytes())
+        # Forwarding (router only)
+        else:
+            decision = self.router.decide(pkt)
+            if decision.forward and decision.packet is not None:
+                self.send_guarded(decision.packet.to_bytes(), is_forwarding=True)
 
     # ------------------------------------------------------------
     # Packet dispatcher
@@ -273,21 +247,21 @@ class MeshCoreNode:
         timestamp = int(time.time())
         pkt = builder.build_advert(self.identity, timestamp, app_data)
         routed = self.outbound.prepare_flood(pkt)
-        self.send_raw(routed.to_bytes())
+        self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_direct(self, dest: Identity, plaintext: bytes):
         from meshcore_node import builder
 
         pkt = builder.build_direct_datagram(self.identity, dest, plaintext)
         routed = self.outbound.prepare_direct(pkt, dest.hash())
-        self.send_raw(routed.to_bytes())
+        self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_group(self, group: GroupChannel, plaintext: bytes):
         from meshcore_node import builder
 
         pkt = builder.build_group_datagram(group, plaintext)
         routed = self.outbound.prepare_flood(pkt)
-        self.send_raw(routed.to_bytes())
+        self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_path(self, path_hashes: list[bytes], payload: bytes):
         from meshcore_node import builder
@@ -301,7 +275,7 @@ class MeshCoreNode:
             payload=payload,
         )
         routed = self.outbound.prepare_flood(pkt, include_initial_hop=False)
-        self.send_raw(routed.to_bytes())
+        self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_trace(self, trace_entries: list[tuple[float, bytes]], payload: bytes):
         from meshcore_node import builder
@@ -314,11 +288,19 @@ class MeshCoreNode:
             payload=payload,
         )
         routed = self.outbound.prepare_flood(pkt, include_initial_hop=False)
-        self.send_raw(routed.to_bytes())
+        self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_raw_custom(self, payload: bytes):
         from meshcore_node import builder
 
         pkt = builder.build_raw_custom(payload)
         routed = self.outbound.prepare_flood(pkt)
-        self.send_raw(routed.to_bytes())
+        self.send_guarded(routed.to_bytes(), is_forwarding=False)
+
+    def send_guarded(self, data: bytes, *, is_forwarding: bool):
+        # Forwarding is only allowed for router nodes
+        if is_forwarding and not self.is_router:
+            raise RuntimeError("Companion nodes cannot forward packets")
+
+        # User-initiated sends are always allowed
+        self.send_raw(data)

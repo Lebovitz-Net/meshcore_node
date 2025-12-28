@@ -14,7 +14,7 @@ class ForwardingDecision:
         self.packet = packet
 
 
-class Router:
+class ForwardingRouter:
     """
     Implements inbound routing decisions and PATH/TRACE modifications.
     """
