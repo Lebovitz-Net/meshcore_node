@@ -3,7 +3,7 @@ requires = ["setuptools>=65", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "meshcore-node"
+name = "meshcore-py-node"
 version = "0.1.0"
 description = "A standalone MeshCore OTA node implementation in Python."
 readme = "README.md"
@@ -28,6 +28,14 @@ dependencies = [
     "cryptography>=41.0.0",
 ]
 
+[project.optional-dependencies]
+# Hardware extra: install when running on physical SX1262 hardware (e.g. Raspberry Pi).
+# sx1262_driver is a local editable install — pip install -e ../sx1262_driver
+# or via pip if published: pip install meshcore-py-node[sx1262]
+sx1262 = [
+    "sx1262_driver",
+]
+
 [project.urls]
 Homepage = "https://github.com/YOUR_GITHUB/meshcore-node"
 Documentation = "https://github.com/YOUR_GITHUB/meshcore-node/docs"
@@ -35,4 +43,4 @@ Source = "https://github.com/YOUR_GITHUB/meshcore-node"
 Issues = "https://github.com/YOUR_GITHUB/meshcore-node/issues"
 
 [tool.setuptools.packages.find]
-where = ["meshcore_node"]
+where = ["meshcore_py_node"]

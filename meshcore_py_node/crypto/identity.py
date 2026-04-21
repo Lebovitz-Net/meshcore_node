@@ -1,4 +1,4 @@
-# meshcore_node/crypto/identity.py
+﻿# meshcore_py_node/crypto/identity.py
 
 from __future__ import annotations
 from dataclasses import dataclass
@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (
 )
 from cryptography.hazmat.primitives import serialization
 
-from meshcore_node.crypto.utils import sha256, mac_then_encrypt, mac_then_decrypt
+from meshcore_py_node.crypto.utils import sha256, mac_then_encrypt, mac_then_decrypt
 
 
 @dataclass
@@ -24,12 +24,12 @@ class Identity:
     """
     pub_key: bytes  # Ed25519 public key
 
-    def hash(self) -> bytes:
+    def hash(self, hash_size: int = 1) -> bytes:
         """
-        1-byte identity hash prefix (MeshCore style).
+        Identity hash prefix.  hash_size=1 → V1 (pre-1.114.0), hash_size=2 → V2 (1.114.0+).
         """
         full = sha256(self.pub_key)
-        return full[:1]
+        return full[:hash_size]
 
 
 class LocalIdentity(Identity):

@@ -1,12 +1,20 @@
+﻿from meshcore_py_node.node import MeshCoreNode
+from meshcore_py_node.packet.header import PayloadVersion
+
+
 class MeshCoreRouter(MeshCoreNode):
-    def __init__(self, send_raw, emit_event, store):
-        # Routers do not have a user identity
+    def __init__(self, identity, send_raw, emit_event, store,
+                 version: PayloadVersion = PayloadVersion.V1):
+        # Routers have an identity for path-appending but do not decrypt user messages
+        if identity is None:
+            raise ValueError("MeshCoreRouter requires an identity (used for path/trace hash appending)")
         super().__init__(
-            identity=None,
+            identity=identity,
             send_raw=send_raw,
             emit_event=emit_event,
             store=store,
             is_router=True,
+            version=version,
         )
 
     # Disable all user-initiated sends

@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import time
-from sx1262_driver import SX1262, RX_CONTINUOUS, TX_SINGLE, LORA_SYNC_WORD_PUBLIC
-from meshcore_node import MeshCoreNode, LocalStore
+from sx1262_driver import SX1262, RX_CONTINUOUS, TX_SINGLE
+from meshcore_py_node import MeshCoreNode, LocalStore
 
 # ------------------------------------------------------------
 # Radio pin mapping
@@ -63,7 +63,8 @@ def main():
         raise RuntimeError("SX1262 failed to initialize")
 
     # Configure radio
-    radio.set_sync_word(LORA_SYNC_WORD_PUBLIC)
+    # MeshCore sync word (0x1242) — NOT the LoRaWAN public sync word (0x3444)
+    radio.set_sync_word(0x1242)
     radio.set_frequency(910_525_000)
     radio.set_lora_modulation(sf=7, bw=62_500, cr=5, ldro=False)
     radio.set_lora_packet(

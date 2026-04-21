@@ -1,62 +1,78 @@
-# meshcore_node/builder.py
+﻿# meshcore_py_node/builder.py
 
 from __future__ import annotations
 
-from meshcore_node.packet.packet import MeshCorePacket
-from meshcore_node.packet.header import RouteType, PayloadType, PayloadVersion
-from meshcore_node.crypto.identity import Identity, LocalIdentity
-from meshcore_node.group import GroupChannel
-from meshcore_node.packet.advert import build_advert_payload
+from meshcore_py_node.packet.packet import MeshCorePacket
+from meshcore_py_node.packet.header import RouteType, PayloadType, PayloadVersion
+from meshcore_py_node.crypto.identity import Identity, LocalIdentity
+from meshcore_py_node.group import GroupChannel
+from meshcore_py_node.packet.advert import build_advert_payload
 
 
-def build_advert(identity: LocalIdentity, timestamp: int, app_data: bytes) -> MeshCorePacket:
+def build_advert(
+    identity: LocalIdentity,
+    timestamp: int,
+    app_data: bytes,
+    version: PayloadVersion = PayloadVersion.V1,
+) -> MeshCorePacket:
     payload = build_advert_payload(identity, timestamp, app_data)
     return MeshCorePacket(
         route=RouteType.FLOOD,
         payload_type=PayloadType.ADVERT,
-        version=PayloadVersion.V1,
+        version=version,
         path_len=0,
         path=b"",
         payload=payload,
     )
 
 
-def build_direct_datagram(src: LocalIdentity, dest: Identity, plaintext: bytes) -> MeshCorePacket:
-    dest_hash = dest.hash()
-    src_hash = src.hash()
+def build_direct_datagram(
+    src: LocalIdentity,
+    dest: Identity,
+    plaintext: bytes,
+    version: PayloadVersion = PayloadVersion.V1,
+) -> MeshCorePacket:
+    hash_size = 1 if version == PayloadVersion.V1 else 2
+    dest_hash = dest.hash(hash_size)
+    src_hash = src.hash(hash_size)
     enc = src.encrypt_for(dest, plaintext)
     payload = dest_hash + src_hash + enc
 
     return MeshCorePacket(
         route=RouteType.DIRECT,
         payload_type=PayloadType.TXT_MSG,
-        version=PayloadVersion.V1,
+        version=version,
         path_len=0,
         path=b"",
         payload=payload,
     )
 
 
-def build_group_datagram(group: GroupChannel, plaintext: bytes) -> MeshCorePacket:
+def build_group_datagram(
+    group: GroupChannel,
+    plaintext: bytes,
+    version: PayloadVersion = PayloadVersion.V1,
+) -> MeshCorePacket:
+    hash_size = 1 if version == PayloadVersion.V1 else 2
     enc = group.encrypt(plaintext)
-    payload = group.hash + enc
+    payload = group.get_hash(hash_size) + enc
 
     return MeshCorePacket(
         route=RouteType.FLOOD,
         payload_type=PayloadType.GRP_TXT,
-        version=PayloadVersion.V1,
+        version=version,
         path_len=0,
         path=b"",
         payload=payload,
     )
 
 
-def build_ack(crc: int) -> MeshCorePacket:
+def build_ack(crc: int, version: PayloadVersion = PayloadVersion.V1) -> MeshCorePacket:
     payload = crc.to_bytes(2, "little", signed=False)
     return MeshCorePacket(
         route=RouteType.FLOOD,
         payload_type=PayloadType.ACK,
-        version=PayloadVersion.V1,
+        version=version,
         path_len=0,
         path=b"",
         payload=payload,
@@ -103,11 +119,11 @@ def build_trace_packet(
     )
 
 
-def build_raw_custom(payload: bytes) -> MeshCorePacket:
+def build_raw_custom(payload: bytes, version: PayloadVersion = PayloadVersion.V1) -> MeshCorePacket:
     return MeshCorePacket(
         route=RouteType.FLOOD,
         payload_type=PayloadType.RAW_CUSTOM,
-        version=PayloadVersion.V1,
+        version=version,
         path_len=0,
         path=b"",
         payload=payload,

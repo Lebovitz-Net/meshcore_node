@@ -1,29 +1,33 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from typing import Callable, Optional
 import time
 
-from meshcore_node.packet.packet import MeshCorePacket
-from meshcore_node.packet.header import PayloadType
-from meshcore_node.crypto.identity import Identity, LocalIdentity
-from meshcore_node.group import GroupChannel
-from meshcore_node.routing.forwarding import ForwardingRouter
-from meshcore_node.routing.outbound import OutboundRouter
+from meshcore_py_node.packet.packet import MeshCorePacket
+from meshcore_py_node.packet.header import PayloadType, PayloadVersion
+from meshcore_py_node.crypto.identity import Identity, LocalIdentity
+from meshcore_py_node.group import GroupChannel
+from meshcore_py_node.routing.forwarding import ForwardingRouter
+from meshcore_py_node.routing.outbound import OutboundRouter
 
 
 class MeshCoreNode:
-    def __init__(self, identity, send_raw, emit_event, store, *, is_router=False):
+    def __init__(self, identity, send_raw, emit_event, store, *, is_router=False,
+                 version: PayloadVersion = PayloadVersion.V1):
         self.identity = identity
         self.send_raw = send_raw
         self.emit_event = emit_event
         self.store = store
         self.is_router = is_router
+        self.version = version
 
         self._groups = store.groups      # dict[bytes, GroupChannel]
         self._dedupe = store.dedupe      # DedupeTable-like
 
         # outbound/inbound routing helpers
-        self.outbound = OutboundRouter(self)
-        self.router = ForwardingRouter(self)
+        hash_size = 1 if version == PayloadVersion.V1 else 2
+        identity_hash = identity.hash(hash_size) if identity is not None else bytes(hash_size)
+        self.outbound = OutboundRouter(identity_hash)
+        self.router = ForwardingRouter(identity_hash)
 
     # ------------------------------------------------------------
     # Guarded send
@@ -86,7 +90,7 @@ class MeshCoreNode:
     # ADVERT
     # ------------------------------------------------------------
     def _handle_advert(self, pkt: MeshCorePacket):
-        from meshcore_node.packet.advert import parse_advert
+        from meshcore_py_node.packet.advert import parse_advert
 
         advert = parse_advert(pkt.payload)
         identity = advert.identity
@@ -107,17 +111,18 @@ class MeshCoreNode:
     def _handle_direct(self, pkt: MeshCorePacket):
         """
         Direct messages layout:
-          dest_hash[1] | src_hash[1] | enc_and_mac[..]
+          dest_hash[hash_size] | src_hash[hash_size] | enc_and_mac[..]
         """
-        if len(pkt.payload) < 2:
+        hs = pkt.hash_size
+        if len(pkt.payload) < hs * 2:
             return
 
-        dest_hash = pkt.payload[0:1]
-        src_hash = pkt.payload[1:2]
-        enc_and_mac = pkt.payload[2:]
+        dest_hash = pkt.payload[0:hs]
+        src_hash = pkt.payload[hs:hs * 2]
+        enc_and_mac = pkt.payload[hs * 2:]
 
         # Only decrypt if addressed to us
-        if dest_hash != self.identity.hash():
+        if dest_hash != self.identity.hash(hs):
             # Not for us; we rely on Router to handle forwarding, so just emit for diagnostics.
             self.emit_event("direct_not_for_us", {
                 "packet": pkt,
@@ -155,13 +160,17 @@ class MeshCoreNode:
     # GROUP (GRP_TXT / GRP_DATA)
     # ------------------------------------------------------------
     def _handle_group(self, pkt: MeshCorePacket):
-        if len(pkt.payload) < 1:
+        hs = pkt.hash_size
+        if len(pkt.payload) < hs:
             return
 
-        chan_hash = pkt.payload[0:1]
-        enc_and_mac = pkt.payload[1:]
+        chan_hash = pkt.payload[0:hs]
+        enc_and_mac = pkt.payload[hs:]
 
         group = self._groups.get(chan_hash)
+        if group is None and len(chan_hash) > 1:
+            # V2 packet but groups dict keyed by 1-byte V1 hash — fall back
+            group = self._groups.get(chan_hash[:1])
         if group is None:
             self.emit_event("group_unknown_channel", {
                 "packet": pkt,
@@ -242,35 +251,36 @@ class MeshCoreNode:
     # Outbound API
     # ------------------------------------------------------------
     def send_advert(self, app_data: bytes = b""):
-        from meshcore_node import builder
+        from meshcore_py_node import builder
 
         timestamp = int(time.time())
-        pkt = builder.build_advert(self.identity, timestamp, app_data)
+        pkt = builder.build_advert(self.identity, timestamp, app_data, version=self.version)
         routed = self.outbound.prepare_flood(pkt)
         self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_direct(self, dest: Identity, plaintext: bytes):
-        from meshcore_node import builder
+        from meshcore_py_node import builder
 
-        pkt = builder.build_direct_datagram(self.identity, dest, plaintext)
-        routed = self.outbound.prepare_direct(pkt, dest.hash())
+        pkt = builder.build_direct_datagram(self.identity, dest, plaintext, version=self.version)
+        hash_size = 1 if self.version == PayloadVersion.V1 else 2
+        routed = self.outbound.prepare_direct(pkt, dest.hash(hash_size))
         self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_group(self, group: GroupChannel, plaintext: bytes):
-        from meshcore_node import builder
+        from meshcore_py_node import builder
 
-        pkt = builder.build_group_datagram(group, plaintext)
+        pkt = builder.build_group_datagram(group, plaintext, version=self.version)
         routed = self.outbound.prepare_flood(pkt)
         self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_path(self, path_hashes: list[bytes], payload: bytes):
-        from meshcore_node import builder
-        from meshcore_node.packet.header import RouteType, PayloadVersion
+        from meshcore_py_node import builder
+        from meshcore_py_node.packet.header import RouteType
 
         pkt = builder.build_path_packet(
             route=RouteType.FLOOD,
             payload_type=PayloadType.PATH,
-            version=PayloadVersion.V1,
+            version=self.version,
             path_hashes=path_hashes,
             payload=payload,
         )
@@ -278,12 +288,12 @@ class MeshCoreNode:
         self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_trace(self, trace_entries: list[tuple[float, bytes]], payload: bytes):
-        from meshcore_node import builder
-        from meshcore_node.packet.header import RouteType, PayloadVersion
+        from meshcore_py_node import builder
+        from meshcore_py_node.packet.header import RouteType
 
         pkt = builder.build_trace_packet(
             route=RouteType.FLOOD,
-            version=PayloadVersion.V1,
+            version=self.version,
             trace_entries=trace_entries,
             payload=payload,
         )
@@ -291,9 +301,9 @@ class MeshCoreNode:
         self.send_guarded(routed.to_bytes(), is_forwarding=False)
 
     def send_raw_custom(self, payload: bytes):
-        from meshcore_node import builder
+        from meshcore_py_node import builder
 
-        pkt = builder.build_raw_custom(payload)
+        pkt = builder.build_raw_custom(payload, version=self.version)
         routed = self.outbound.prepare_flood(pkt)
         self.send_guarded(routed.to_bytes(), is_forwarding=False)
 

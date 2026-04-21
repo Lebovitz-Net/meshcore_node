@@ -1,4 +1,4 @@
-from meshcore_node import MeshCoreNode, LocalStore
+﻿from meshcore_py_node import MeshCoreNode, LocalStore
 
 def send_raw(data: bytes):
     # Replace with SX1262, serial, UDP, etc.

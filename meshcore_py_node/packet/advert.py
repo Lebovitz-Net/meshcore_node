@@ -1,9 +1,9 @@
-# meshcore_node/packet/advert.py
+﻿# meshcore_py_node/packet/advert.py
 
 from __future__ import annotations
 from dataclasses import dataclass
 
-from meshcore_node.crypto.identity import Identity
+from meshcore_py_node.crypto.identity import Identity
 
 
 @dataclass

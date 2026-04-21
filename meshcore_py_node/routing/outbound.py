@@ -1,10 +1,10 @@
-# meshcore_node/routing/outbound.py
+﻿# meshcore_py_node/routing/outbound.py
 
 from __future__ import annotations
 
-from meshcore_node.packet.packet import MeshCorePacket
-from meshcore_node.packet.header import RouteType, PayloadType, PayloadVersion
-from meshcore_node.constants import PATH_HASH_SIZE, MAX_PATH_LEN
+from meshcore_py_node.packet.packet import MeshCorePacket
+from meshcore_py_node.packet.header import RouteType, PayloadType, PayloadVersion
+from meshcore_py_node.constants import MAX_PATH_LEN
 
 
 class OutboundRouter:
@@ -49,24 +49,14 @@ class OutboundRouter:
             payload=pkt.payload,
         )
 
-    def prepare_zero_hop(self, pkt: MeshCorePacket) -> MeshCorePacket:
-        return MeshCorePacket(
-            route=RouteType.ZERO_HOP,
-            payload_type=pkt.payload_type,
-            version=pkt.version,
-            path_len=0,
-            path=b"",
-            payload=pkt.payload,
-        )
-
     def trim_path(self, pkt: MeshCorePacket, max_hops: int) -> MeshCorePacket:
         if pkt.path_len <= max_hops:
             return pkt
 
         if pkt.payload_type != PayloadType.TRACE:
-            new_path = pkt.path[:max_hops]
+            new_path = pkt.path[:max_hops * pkt.hash_size]
         else:
-            per_hop = 1 + PATH_HASH_SIZE
+            per_hop = 1 + pkt.hash_size
             new_path = pkt.path[: max_hops * per_hop]
 
         return MeshCorePacket(

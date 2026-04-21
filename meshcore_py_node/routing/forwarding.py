@@ -1,11 +1,11 @@
-# meshcore_node/routing/forwarding.py
+﻿# meshcore_py_node/routing/forwarding.py
 
 from __future__ import annotations
 from typing import Optional
 
-from meshcore_node.packet.packet import MeshCorePacket
-from meshcore_node.packet.header import RouteType, PayloadType
-from meshcore_node.constants import PATH_HASH_SIZE
+from meshcore_py_node.packet.packet import MeshCorePacket
+from meshcore_py_node.packet.header import RouteType, PayloadType
+from meshcore_py_node.constants import PATH_HASH_SIZE
 
 
 class ForwardingDecision:
@@ -24,10 +24,6 @@ class ForwardingRouter:
 
     def decide(self, pkt: MeshCorePacket) -> ForwardingDecision:
         rt = pkt.route
-
-        # Zero-hop packets are never forwarded
-        if rt == RouteType.ZERO_HOP:
-            return ForwardingDecision(False)
 
         # Direct packets: forward only if not addressed to us
         if rt == RouteType.DIRECT:

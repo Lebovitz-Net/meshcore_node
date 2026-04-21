@@ -1,16 +1,16 @@
-# meshcore_node/local_store.py
+﻿# meshcore_py_node/local_store.py
 
 from __future__ import annotations
 import json
 import os
 from typing import Optional, Dict
 
-from meshcore_node.crypto.identity import LocalIdentity, Identity
-from meshcore_node.group import GroupChannel
-from meshcore_node.routing.dedupe import DedupeTable
+from meshcore_py_node.crypto.identity import LocalIdentity, Identity
+from meshcore_py_node.group import GroupChannel
+from meshcore_py_node.routing.dedupe import DedupeTable
 
 
-DEFAULT_DIR = os.path.expanduser("~/.meshcore_node")
+DEFAULT_DIR = os.path.expanduser("~/.meshcore_py_node")
 IDENTITY_FILE = os.path.join(DEFAULT_DIR, "identity.json")
 GROUPS_FILE = os.path.join(DEFAULT_DIR, "groups.json")
 PEERS_FILE = os.path.join(DEFAULT_DIR, "peers.json")
